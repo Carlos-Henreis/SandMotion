@@ -10,8 +10,8 @@ def main():
     parser.add_argument("--soundtrack", type=Path, default=None, help="Trilha opcional misturada aos efeitos de explosão, movimento e retorno")
     parser.add_argument("--no-drop-sound", dest="drop_sound", action="store_false", help="Desativa os sons sintetizados de explosão, movimento e retorno")
     parser.set_defaults(drop_sound=True)
-    parser.add_argument("--width", type=int, default=540)
-    parser.add_argument("--height", type=int, default=960)
+    parser.add_argument("--width", type=int, default=720)
+    parser.add_argument("--height", type=int, default=1280)
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--explosion-time", type=float, default=3.0,
                         help="Segundo da explosão no modo narrative (0 <= tempo < 50; padrão 3)")
@@ -25,7 +25,7 @@ def main():
     parser.add_argument("--release-duration", type=float, default=48,
                         help="Tempo durante o qual partículas são liberadas")
     parser.add_argument("--release-mode", choices=("bottom-up", "noise"), default="bottom-up")
-    parser.add_argument("--particles", type=int, default=60000, dest="count")
+    parser.add_argument("--particles", type=int, default=90000, dest="count")
     parser.add_argument("--force", type=float, default=1200)
     parser.add_argument("--gravity", type=float, default=520)
     parser.add_argument("--drag", type=float, default=0.12)
@@ -35,9 +35,9 @@ def main():
     parser.add_argument("--plinko-rows", type=int, default=0,
                         help="Linhas de obstáculos circulares invisíveis; 0 desliga")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--particle-size", type=int, default=2)
+    parser.add_argument("--particle-size", type=int, default=3)
     parser.add_argument("--encoding-profile", choices=("social", "balanced", "quality"),
-                        default="social", help="social: 4 Mb/s, balanced: 6 Mb/s, quality: CRF")
+                        default="balanced", help="social: 4 Mb/s, balanced: 6 Mb/s, quality: CRF")
     parser.add_argument("--bitrate-mbps", type=float, default=None,
                         help="Define bitrate médio de vídeo em Mb/s (sobrescreve social/balanced)")
     parser.add_argument("--crf", type=int, default=20,
