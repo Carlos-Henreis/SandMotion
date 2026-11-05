@@ -5,7 +5,8 @@ import tempfile
 import wave
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+from .visuals import draw_particles
 from .encoding import encoding_args
 
 BACKGROUND = np.array([12, 14, 23], dtype=np.uint8)
@@ -189,12 +190,12 @@ def render_narrative(input_path: Path, output_path: Path, *, width: int, height:
                      fps: int, duration: float, count: int, seed: int,
                      particle_size: int, crf: int, soundtrack: Path | None = None,
                      drop_sound: bool = True, motion_speed: float = 0.6,
-                     encoding_profile: str = "social", bitrate_mbps: float | None = None,
+                     encoding_profile: str = "balanced", bitrate_mbps: float | None = None,
                      explosion_time: float = 3.0, **unused) -> None:
     """One long simulation; clean image 0-3s and 57-60s, chaos 3-50s."""
     from .chaos import (DURATION, phase, initial_burst, chaotic_step,
                         rebuild_step, reconstruction_blend)
-    from .render import image_particles
+    from .render import image_particles, load_image
     if not (0.1 <= motion_speed <= 2.0):
         raise ValueError('--motion-speed deve estar entre 0.1 e 2.0')
     video_encoding = encoding_args(encoding_profile, crf=crf, bitrate_mbps=bitrate_mbps)
@@ -207,12 +208,18 @@ def render_narrative(input_path: Path, output_path: Path, *, width: int, height:
     if soundtrack is not None and not soundtrack.is_file():
         raise FileNotFoundError(soundtrack)
 
-    original = Image.open(input_path).convert('RGBA')
-    original.thumbnail((int(width*.75), int(height*.54)), Image.Resampling.LANCZOS)
+    original = load_image(input_path, width, height)
     canvas = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     canvas.alpha_composite(original, ((width-original.width)//2,
                                       (height-original.height)//2))
-    full = Image.new('RGBA', (width, height), tuple(BACKGROUND)+(255,))
+    # A low-contrast blurred version fills otherwise empty vertical space
+    # without stretching or cropping the sharp original photo.
+    source_rgb = Image.open(input_path).convert('RGB')
+    cover = ImageOps.fit(source_rgb, (width, height),
+                         method=Image.Resampling.LANCZOS)
+    cover = cover.filter(ImageFilter.GaussianBlur(max(8, width//24)))
+    cover = ImageEnhance.Brightness(cover).enhance(.22)
+    full = cover.convert('RGBA')
     full.alpha_composite(canvas)
     original_rgb = np.asarray(full.convert('RGB'))
     original_bytes = original_rgb.tobytes()
@@ -247,15 +254,7 @@ def render_narrative(input_path: Path, output_path: Path, *, width: int, height:
                         rebuild_step(p, v, origins, dt, now)
                 frame = np.empty((height, width, 3), dtype=np.uint8)
                 frame[:] = BACKGROUND
-                coords = np.rint(p).astype(np.int32)
-                # Render splashes with original image colors, not a sampled preview.
-                for dy in range(-(particle_size//2),
-                                particle_size-particle_size//2):
-                    for dx in range(-(particle_size//2),
-                                    particle_size-particle_size//2):
-                        x, y = coords[:,0]+dx, coords[:,1]+dy
-                        good = (x>=0)&(x<width)&(y>=0)&(y<height)
-                        frame[y[good], x[good]] = colors[good]
+                draw_particles(frame, p, v, colors, particle_size)
                 if scene == 'rebuild':
                     blend = reconstruction_blend(now)
                     if blend:
