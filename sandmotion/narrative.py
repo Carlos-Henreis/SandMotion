@@ -157,7 +157,10 @@ def add_audio(video: Path, soundtrack: Path | None, cue: bool, duration: float) 
     """Optional user-provided music plus a synthesized cue at precisely 45.0s."""
     if not cue and soundtrack is None:
         return
-    with tempfile.TemporaryDirectory() as td:
+    # Mux in the destination filesystem: Path.replace() is atomic only there.
+    # tempfile's default /tmp may be a different mount (EXDEV on Linux).
+    video.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='.sandmotion-mux-', dir=video.parent) as td:
         temp = Path(td)
         cue_path = temp/'drop.wav'
         if cue:
