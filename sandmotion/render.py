@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 from .physics import explode, plinko_obstacles, release_times
+from .encoding import encoding_args
 
 
 def load_image(path: Path, width: int, height: int) -> Image.Image:
@@ -63,7 +64,8 @@ def render(input_path: Path, output_path: Path, *, width: int = 540,
            bounce: float = 0.25, friction: float = 0.90, terminal_speed: float = 1400.0,
            plinko_rows: int = 0, seed: int = 42, particle_size: int = 2,
            crf: int = 20, soundtrack: Path | None = None,
-           drop_sound: bool = True, motion_speed: float = 0.6) -> None:
+           drop_sound: bool = True, motion_speed: float = 0.6,
+           encoding_profile: str = "social", bitrate_mbps: float | None = None) -> None:
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("FFmpeg não encontrado. Instale com: sudo apt install ffmpeg")
     if mode == "narrative":
@@ -72,9 +74,11 @@ def render(input_path: Path, output_path: Path, *, width: int = 540,
                                 fps=fps, duration=duration, count=count, seed=seed,
                                 particle_size=particle_size, crf=crf,
                                 soundtrack=soundtrack, drop_sound=drop_sound,
-                                motion_speed=motion_speed)
+                                motion_speed=motion_speed,
+                                encoding_profile=encoding_profile, bitrate_mbps=bitrate_mbps)
     if soundtrack is not None:
         raise ValueError("--soundtrack é suportado no modo narrative.")
+    video_encoding = encoding_args(encoding_profile, crf=crf, bitrate_mbps=bitrate_mbps)
     if min(width, height, fps, count, particle_size) <= 0 or duration <= 0:
         raise ValueError("Resolução, FPS, duração, partículas e tamanho devem ser positivos.")
     if mode not in ("explosion", "disintegration"):
@@ -105,7 +109,7 @@ def render(input_path: Path, output_path: Path, *, width: int = 540,
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
            "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{width}x{height}",
            "-r", str(fps), "-i", "-", "-an", "-c:v", "libx264",
-           "-preset", "veryfast", "-crf", str(crf), "-pix_fmt", "yuv420p",
+           *video_encoding, "-pix_fmt", "yuv420p",
            "-movflags", "+faststart", str(output_path)]
     print(f"Modo: {mode} | Partículas: {len(colors):,} | duração: {duration}s | "
           f"ciclo: {cycle_duration}s | obstáculos: {len(obstacles)}", flush=True)
