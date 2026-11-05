@@ -1,64 +1,53 @@
-# SandMotion v0.2 — Particle Explosion (60 segundos)
+# SandMotion v0.3 — Explosão com imagem nítida
 
-Renderizador procedural em Python: uma imagem PNG/JPEG se desintegra progressivamente em milhares de partículas, que explodem, caem lentamente e desviam de obstáculos circulares invisíveis (Plinko).
+Transforma um PNG ou JPEG em partículas explodindo e caindo. O modo padrão **explosion** mostra a imagem original completa (sem amostragem ou pontilhado) antes da explosão. O modo **disintegration** preserva a liberação progressiva.
 
-## Instalação no Debian
+## Instalação
 
 ```bash
 sudo apt install ffmpeg python3-venv
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e .
-python examples/make_demo.py
-```
-
-## Vídeo padrão de 60 segundos
-
-```bash
-sand-motion examples/demo.png --output output/demo.mp4
-```
-
-O preset padrão gera **60 s, 540×960, 30 FPS**:
-- 0–2 s: imagem estática
-- 2–50 s: desintegração progressiva de baixo para cima, com ruído espacial
-- 50–60 s: partículas restantes continuam sob gravidade e batem no chão/obstáculos
-
-```bash
-sand-motion minha-imagem.png --output output/viral.mp4 \
-  --duration 60 --delay 2 --release-duration 48 \
-  --release-mode bottom-up --plinko-rows 4 \
-  --gravity 150 --drag 0.52 --terminal-speed 210 \
-  --force 230 --fps 30 --particles 30000
-```
-
-## Parâmetros relevantes
-
-| Flag | Padrão | Significado |
-| --- | --- | --- |
-| `--duration` | 60 | Duração total em segundos |
-| `--delay` | 2 | Imagem intacta antes da primeira desintegração |
-| `--release-duration` | 48 | Janela de liberação gradual de partículas |
-| `--release-mode` | bottom-up | `bottom-up` ou `noise` |
-| `--gravity` | 150 | Gravidade em pixels/s² |
-| `--drag` | 0.52 | Resistência exponencial do ar |
-| `--terminal-speed` | 210 | Velocidade máxima em pixels/s |
-| `--plinko-rows` | 4 | Fileiras de círculos invisíveis; 0 desativa |
-| `--force` | 230 | Força de explosão em pixels/s |
-| `--particles` | 30000 | Quantidade máxima de partículas |
-| `--seed` | 42 | Sequência reproduzível |
-
-Use `--width 1080 --height 1920 --fps 60` para Full HD vertical; a renderização será mais lenta.
-
-## Testes
-
-```bash
 pip install -e '.[test]'
+python examples/make_demo.py
 pytest -q
 ```
 
+## Explosão — vídeo de 60 segundos
+
+```bash
+sand-motion imagem.png --output output/explosao.mp4 \
+  --mode explosion --duration 60 --cycle-duration 12 \
+  --delay 1.5 --particles 60000 --force 1200 \
+  --gravity 520 --drag 0.12 --terminal-speed 1400 \
+  --bounce 0.25 --friction 0.90 --plinko-rows 0 \
+  --fps 30
+```
+
+**Timeline:** cinco ciclos de 12 segundos no MP4 de 60 segundos. Em cada ciclo: imagem original limpa por 1,5 s, explosão radial instantânea e queda durante os 10,5 s seguintes. A imagem reaparece no começo de cada ciclo (corte intencional). Não é uma única explosão sustentada fisicamente por 60 s.
+
+O modo `explosion` é o padrão. Para vídeo curto, use `--duration 12`, mantendo `--cycle-duration 12`.
+
+## Desintegração gradual (alternativa)
+
+```bash
+sand-motion imagem.png --mode disintegration --duration 60 \
+  --delay 2 --release-duration 48 --release-mode bottom-up \
+  --force 230 --gravity 150 --drag 0.52 \
+  --terminal-speed 210 --plinko-rows 4
+```
+
+## Parâmetros
+
+- `--mode explosion|disintegration`: comportamento do motor
+- `--duration`: duração final do MP4 (padrão: 60 s)
+- `--cycle-duration`: duração de cada ciclo explosivo (padrão: 12 s)
+- `--delay`: tempo com imagem raster nítida antes de cada explosão
+- `--particles`: limite de partículas após a explosão; não limita os pixels da prévia
+- `--force`, `--gravity`, `--drag`, `--terminal-speed`: parâmetros físicos
+- `--plinko-rows`: 0 desativa obstáculos invisíveis (padrão no modo explosion)
+- `--release-duration` e `--release-mode`: apenas modo disintegration
+
 ## Limitações
 
-- Colisão com o piso, paredes e círculos invisíveis, mas **sem colisões entre partículas**.
-- Obstáculos geométricos fixos, com resposta de contato aproximada.
-- Exportação MP4/H.264 sem áudio.
-- A desintegração gradual preserva a imagem até a liberação de cada partícula; é uma programação de ativação, não uma simulação de material granular contínuo.
+As partículas são independentes, sem colisão entre elas. Durante a explosão podem existir espaços visíveis entre grãos — isso não afeta a nitidez da imagem inicial. O vídeo não contém áudio. A renderização usa FFmpeg.
