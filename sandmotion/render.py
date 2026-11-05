@@ -63,7 +63,7 @@ def render(input_path: Path, output_path: Path, *, width: int = 540,
            bounce: float = 0.25, friction: float = 0.90, terminal_speed: float = 1400.0,
            plinko_rows: int = 0, seed: int = 42, particle_size: int = 2,
            crf: int = 20, soundtrack: Path | None = None,
-           drop_sound: bool = True) -> None:
+           drop_sound: bool = True, motion_speed: float = 0.6) -> None:
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("FFmpeg não encontrado. Instale com: sudo apt install ffmpeg")
     if mode == "narrative":
@@ -71,7 +71,8 @@ def render(input_path: Path, output_path: Path, *, width: int = 540,
         return render_narrative(input_path, output_path, width=width, height=height,
                                 fps=fps, duration=duration, count=count, seed=seed,
                                 particle_size=particle_size, crf=crf,
-                                soundtrack=soundtrack, drop_sound=drop_sound)
+                                soundtrack=soundtrack, drop_sound=drop_sound,
+                                motion_speed=motion_speed)
     if soundtrack is not None:
         raise ValueError("--soundtrack é suportado no modo narrative.")
     if min(width, height, fps, count, particle_size) <= 0 or duration <= 0:
