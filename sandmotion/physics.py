@@ -125,9 +125,9 @@ def explode(positions: np.ndarray, colors: np.ndarray, seed: int,
     direction /= np.maximum(norm, 0.0001)
     angles = rng.uniform(0, 2 * np.pi, len(positions))
     jitter = np.stack([np.cos(angles), np.sin(angles)], axis=1)
-    strength = rng.uniform(0.48, 1.18, (len(positions), 1))
-    velocities = force * strength * (0.82 * direction + 0.25 * jitter)
-    velocities[:, 1] -= force * 0.22
+    strength = rng.uniform(0.7, 1.4, (len(positions), 1))
+    velocities = force * strength * (0.92 * direction + 0.35 * jitter)
+    velocities[:, 1] -= force * 0.35
     return ParticleSystem(positions.copy(), velocities, colors.copy(),
                           gravity, drag, bounce, friction, floor, width, radius,
                           terminal_speed, obstacles)
