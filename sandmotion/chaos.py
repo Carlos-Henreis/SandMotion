@@ -10,8 +10,8 @@ FINAL_HOLD_START = 57.0
 DURATION = 60.0
 
 
-def phase(t: float) -> str:
-    if t < HOOK_END:
+def phase(t: float, explosion_time: float = HOOK_END) -> str:
+    if t < explosion_time:
         return "hook"
     if t < REBUILD_START:
         return "chaos"
