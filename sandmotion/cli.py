@@ -13,6 +13,8 @@ def main():
     parser.add_argument("--width", type=int, default=540)
     parser.add_argument("--height", type=int, default=960)
     parser.add_argument("--fps", type=int, default=30)
+    parser.add_argument("--explosion-time", type=float, default=3.0,
+                        help="Segundo da explosão no modo narrative (0 <= tempo < 50; padrão 3)")
     parser.add_argument("--motion-speed", type=float, default=0.6,
                         help="Velocidade física das partículas no narrative (0.1 a 2.0; padrão 0.6)")
     parser.add_argument("--duration", type=float, default=60)
