@@ -154,7 +154,8 @@ def cue_wave(filename: Path, sample_rate: int = 44100) -> None:
         out.writeframes(data.tobytes())
 
 
-def add_audio(video: Path, soundtrack: Path | None, cue: bool, duration: float) -> None:
+def add_audio(video: Path, soundtrack: Path | None, cue: bool, duration: float,
+              explosion_time: float = 3.0) -> None:
     """Optional user-provided music plus a synthesized cue at precisely 50.0s."""
     if not cue and soundtrack is None:
         return
@@ -166,7 +167,7 @@ def add_audio(video: Path, soundtrack: Path | None, cue: bool, duration: float) 
         cue_path = temp/'drop.wav'
         if cue:
             from .soundscape import soundscape_wave
-            soundscape_wave(cue_path, duration=duration)
+            soundscape_wave(cue_path, duration=duration, explosion_time=explosion_time)
         out = temp/'mux.mp4'
         cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(video)]
         if soundtrack is not None:
@@ -189,7 +190,7 @@ def render_narrative(input_path: Path, output_path: Path, *, width: int, height:
                      particle_size: int, crf: int, soundtrack: Path | None = None,
                      drop_sound: bool = True, motion_speed: float = 0.6,
                      encoding_profile: str = "social", bitrate_mbps: float | None = None,
-                     **unused) -> None:
+                     explosion_time: float = 3.0, **unused) -> None:
     """One long simulation; clean image 0-3s and 57-60s, chaos 3-50s."""
     from .chaos import (DURATION, phase, initial_burst, chaotic_step,
                         rebuild_step, reconstruction_blend)
@@ -197,6 +198,8 @@ def render_narrative(input_path: Path, output_path: Path, *, width: int, height:
     if not (0.1 <= motion_speed <= 2.0):
         raise ValueError('--motion-speed deve estar entre 0.1 e 2.0')
     video_encoding = encoding_args(encoding_profile, crf=crf, bitrate_mbps=bitrate_mbps)
+    if not (0 <= explosion_time < 50):
+        raise ValueError('--explosion-time deve ser >= 0 e < 50 segundos')
     if duration != DURATION:
         raise ValueError('O modo narrative exige --duration 60.')
     if width % 2 or height % 2 or min(width, height, fps, count, particle_size) <= 0:
@@ -229,7 +232,7 @@ def render_narrative(input_path: Path, output_path: Path, *, width: int, height:
     try:
         for frame_index in range(total):
             now = frame_index/fps
-            scene = phase(now)
+            scene = phase(now, explosion_time)
             if scene in ('hook', 'hold'):
                 data = original_bytes
             else:
@@ -237,7 +240,7 @@ def render_narrative(input_path: Path, output_path: Path, *, width: int, height:
                     dt = 1/(fps*4)
                     if scene == 'chaos':
                         # Slow the physics, not the video clock or the scene boundaries.
-                        simulated_time = 3 + (now - 3)*motion_speed
+                        simulated_time = explosion_time + (now - explosion_time)*motion_speed
                         chaotic_step(p, v, dt*motion_speed, simulated_time,
                                      width, height, circles, ramps)
                     else:
@@ -275,4 +278,5 @@ def render_narrative(input_path: Path, output_path: Path, *, width: int, height:
         raise
     finally:
         proc.stderr.close()
-    add_audio(output_path, soundtrack, drop_sound, duration)
+    add_audio(output_path, soundtrack, drop_sound, duration,
+              explosion_time=explosion_time)
