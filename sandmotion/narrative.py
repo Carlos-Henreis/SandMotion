@@ -154,7 +154,7 @@ def cue_wave(filename: Path, sample_rate: int = 44100) -> None:
 
 
 def add_audio(video: Path, soundtrack: Path | None, cue: bool, duration: float) -> None:
-    """Optional user-provided music plus a synthesized cue at precisely 45.0s."""
+    """Optional user-provided music plus a synthesized cue at precisely 50.0s."""
     if not cue and soundtrack is None:
         return
     # Mux in the destination filesystem: Path.replace() is atomic only there.
@@ -172,9 +172,9 @@ def add_audio(video: Path, soundtrack: Path | None, cue: bool, duration: float) 
         if cue:
             cmd += ['-i', str(cue_path)]
         if soundtrack is not None and cue:
-            cmd += ['-filter_complex', '[1:a]volume=0.65[m];[2:a]adelay=45000:all=1[c];[m][c]amix=inputs=2:duration=first:normalize=0[a]', '-map','0:v:0','-map','[a]']
+            cmd += ['-filter_complex', '[1:a]volume=0.65[m];[2:a]adelay=50000:all=1[c];[m][c]amix=inputs=2:duration=first:normalize=0[a]', '-map','0:v:0','-map','[a]']
         elif cue:
-            cmd += ['-af', 'adelay=45000:all=1', '-map','0:v:0','-map','1:a:0']
+            cmd += ['-af', 'adelay=50000:all=1', '-map','0:v:0','-map','1:a:0']
         else:
             cmd += ['-map','0:v:0','-map','1:a:0']
         cmd += ['-c:v','copy','-c:a','aac','-b:a','160k', '-t', str(duration), str(out)]
@@ -186,72 +186,76 @@ def render_narrative(input_path: Path, output_path: Path, *, width: int, height:
                      fps: int, duration: float, count: int, seed: int,
                      particle_size: int, crf: int, soundtrack: Path | None = None,
                      drop_sound: bool = True, **unused) -> None:
-    if duration != 60:
-        raise ValueError('O preset narrative exige --duration 60.')
+    """One long simulation; clean image 0-3s and 57-60s, chaos 3-50s."""
+    from .chaos import (DURATION, phase, initial_burst, chaotic_step,
+                        rebuild_step, reconstruction_blend)
+    from .render import image_particles
+    if duration != DURATION:
+        raise ValueError('O modo narrative exige --duration 60.')
     if width % 2 or height % 2 or min(width, height, fps, count, particle_size) <= 0:
         raise ValueError('Dimensões pares e parâmetros positivos são necessários.')
     if soundtrack is not None and not soundtrack.is_file():
         raise FileNotFoundError(soundtrack)
-    from .render import image_particles
+
     original = Image.open(input_path).convert('RGBA')
     original.thumbnail((int(width*.75), int(height*.54)), Image.Resampling.LANCZOS)
     canvas = Image.new('RGBA', (width, height), (0, 0, 0, 0))
-    canvas.alpha_composite(original, ((width-original.width)//2, (height-original.height)//2))
-    image = np.asarray(canvas)
-    rgb = image[:, :, :3]
-    alpha = image[:, :, 3]
-    base = np.empty((height, width, 3), dtype=np.uint8)
-    base[:] = BACKGROUND
-    yy, xx = np.indices((height, width))
-    order = sweep_order(xx, yy, width, seed)
-    original_frame = Image.new('RGBA', (width, height), tuple(BACKGROUND)+(255,))
-    original_frame.alpha_composite(canvas)
-    original_bytes = original_frame.convert('RGB').tobytes()
+    canvas.alpha_composite(original, ((width-original.width)//2,
+                                      (height-original.height)//2))
+    full = Image.new('RGBA', (width, height), tuple(BACKGROUND)+(255,))
+    full.alpha_composite(canvas)
+    original_rgb = np.asarray(full.convert('RGB'))
+    original_bytes = original_rgb.tobytes()
     origins, colors = image_particles(input_path, width, height, count, seed)
-    samples = sweep_order(origins[:, 0], origins[:, 1], width, seed)
     p = origins.copy()
-    v = np.zeros_like(p)
-    # Small directional kick upon release; not a simultaneous radial explosion.
-    rng = np.random.default_rng(seed)
-    kick = np.column_stack([rng.normal(42, 25, len(origins)),
-                            rng.normal(-30, 30, len(origins))]).astype(np.float32)
-    released_before = np.zeros(len(origins), dtype=bool)
+    v = initial_burst(origins, seed, width, height)
     circles, ramps = funnel_geometry(width, height)
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = ['ffmpeg','-hide_banner','-loglevel','error','-y','-f','rawvideo',
            '-pix_fmt','rgb24','-s',f'{width}x{height}','-r',str(fps),
            '-i','-','-an','-c:v','libx264','-preset','veryfast',
-           '-crf',str(crf),'-pix_fmt','yuv420p','-movflags','+faststart',str(output_path)]
+           '-crf',str(crf),'-pix_fmt','yuv420p','-movflags','+faststart',
+           str(output_path)]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+    total = round(duration*fps)
     try:
-        total = round(duration*fps)
-        for f in range(total):
-            now = f/fps
-            if now < 5:
-                frame = original_bytes
+        for frame_index in range(total):
+            now = frame_index/fps
+            scene = phase(now)
+            if scene in ('hook', 'hold'):
+                data = original_bytes
             else:
-                progress = np.clip((now-5)/20,0,1) if now < 25 else 1.0
-                active = samples <= progress if now < 25 else np.ones(len(samples), dtype=bool)
-                just_released = active & ~released_before
-                v[just_released] = kick[just_released]
-                released_before |= active
                 for _ in range(4):
-                    narrative_step(p,v,origins,active,1/(fps*4),now,width,height,circles,ramps)
-                if now >= 58:
-                    # Exact endpoint, with smooth continuous raster restoration.
-                    blend = np.clip((now-58)/max(duration-58-1/fps,1/fps),0,1)
-                    blend = blend*blend*(3-2*blend)
-                else:
-                    blend = 0.0
-                frame = draw_narrative(base,rgb,alpha,order,p,colors,active,
-                                       particle_size,progress,blend)
-                if f == total-1:
-                    frame = original_bytes
-            proc.stdin.write(frame)
+                    dt = 1/(fps*4)
+                    if scene == 'chaos':
+                        chaotic_step(p, v, dt, now, width, height, circles, ramps)
+                    else:
+                        rebuild_step(p, v, origins, dt, now)
+                frame = np.empty((height, width, 3), dtype=np.uint8)
+                frame[:] = BACKGROUND
+                coords = np.rint(p).astype(np.int32)
+                # Render splashes with original image colors, not a sampled preview.
+                for dy in range(-(particle_size//2),
+                                particle_size-particle_size//2):
+                    for dx in range(-(particle_size//2),
+                                    particle_size-particle_size//2):
+                        x, y = coords[:,0]+dx, coords[:,1]+dy
+                        good = (x>=0)&(x<width)&(y>=0)&(y<height)
+                        frame[y[good], x[good]] = colors[good]
+                if scene == 'rebuild':
+                    blend = reconstruction_blend(now)
+                    if blend:
+                        frame = np.rint((1-blend)*frame +
+                                        blend*original_rgb).astype(np.uint8)
+                data = frame.tobytes()
+            proc.stdin.write(data)
+            if (frame_index+1) % (max(1, fps*10)) == 0:
+                print(f'Narrative: {(frame_index+1)/fps:.0f}/{duration:.0f}s', flush=True)
         proc.stdin.close()
-        error = proc.stderr.read().decode('utf-8', 'replace')
+        err = proc.stderr.read().decode('utf-8', 'replace')
         if proc.wait() != 0:
-            raise RuntimeError(error)
+            raise RuntimeError('FFmpeg falhou: '+err)
     except BaseException:
         if proc.stdin and not proc.stdin.closed:
             proc.stdin.close()
