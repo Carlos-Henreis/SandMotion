@@ -65,7 +65,8 @@ def render(input_path: Path, output_path: Path, *, width: int = 540,
            plinko_rows: int = 0, seed: int = 42, particle_size: int = 2,
            crf: int = 20, soundtrack: Path | None = None,
            drop_sound: bool = True, motion_speed: float = 0.6,
-           encoding_profile: str = "social", bitrate_mbps: float | None = None) -> None:
+           encoding_profile: str = "social", bitrate_mbps: float | None = None,
+           explosion_time: float = 3.0) -> None:
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("FFmpeg não encontrado. Instale com: sudo apt install ffmpeg")
     if mode == "narrative":
@@ -75,7 +76,8 @@ def render(input_path: Path, output_path: Path, *, width: int = 540,
                                 particle_size=particle_size, crf=crf,
                                 soundtrack=soundtrack, drop_sound=drop_sound,
                                 motion_speed=motion_speed,
-                                encoding_profile=encoding_profile, bitrate_mbps=bitrate_mbps)
+                                encoding_profile=encoding_profile, bitrate_mbps=bitrate_mbps,
+                                explosion_time=explosion_time)
     if soundtrack is not None:
         raise ValueError("--soundtrack é suportado no modo narrative.")
     video_encoding = encoding_args(encoding_profile, crf=crf, bitrate_mbps=bitrate_mbps)
