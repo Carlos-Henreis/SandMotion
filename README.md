@@ -1,56 +1,53 @@
-# SandMotion 0.1.0 — Particle Explosion
+# SandMotion v0.2 — Particle Explosion (60 segundos)
 
-Gera vídeos MP4 com explosão radial de partículas coloridas extraídas de imagens PNG/JPEG, seguida de gravidade e colisão com chão e paredes.
+Renderizador procedural em Python: uma imagem PNG/JPEG se desintegra progressivamente em milhares de partículas, que explodem, caem lentamente e desviam de obstáculos circulares invisíveis (Plinko).
 
-## Instalação (Debian/Linux)
+## Instalação no Debian
 
 ```bash
 sudo apt install ffmpeg python3-venv
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
-```
-
-## Rodar o exemplo
-
-Primeiro, gere uma imagem de demonstração:
-
-```bash
 python examples/make_demo.py
-sand-motion examples/demo.png --output output/demo.mp4 \
-  --duration 8 --delay 1 --fps 30 --particles 30000
 ```
 
-Ou, sem usar o comando instalado:
+## Vídeo padrão de 60 segundos
 
 ```bash
-python -m sandmotion examples/demo.png --output output/demo.mp4
+sand-motion examples/demo.png --output output/demo.mp4
 ```
 
-## Criar vídeo vertical em Full HD
+O preset padrão gera **60 s, 540×960, 30 FPS**:
+- 0–2 s: imagem estática
+- 2–50 s: desintegração progressiva de baixo para cima, com ruído espacial
+- 50–60 s: partículas restantes continuam sob gravidade e batem no chão/obstáculos
 
 ```bash
-sand-motion sua-imagem.png --output output/viral.mp4 \
-  --width 1080 --height 1920 --fps 60 \
-  --duration 12 --delay 2 --particles 80000 \
-  --force 850 --gravity 1050 --particle-size 2 --seed 42
+sand-motion minha-imagem.png --output output/viral.mp4 \
+  --duration 60 --delay 2 --release-duration 48 \
+  --release-mode bottom-up --plinko-rows 4 \
+  --gravity 150 --drag 0.52 --terminal-speed 210 \
+  --force 230 --fps 30 --particles 30000
 ```
 
-Para PNG transparente, apenas pixels com alpha >= 64 viram partículas. Imagens opacas incluem o fundo. A imagem é redimensionada para caber na região central e preserva as cores.
+## Parâmetros relevantes
 
-## Parâmetros
-
-| Flag | Padrão | Efeito |
+| Flag | Padrão | Significado |
 | --- | --- | --- |
-| `--force` | 650 | Potência da explosão (pixels/s) |
-| `--gravity` | 900 | Gravidade (pixels/s²) |
-| `--drag` | 0.22 | Arrasto exponencial (1/s) |
-| `--bounce` | 0.35 | Restituição em choques (0–1) |
-| `--friction` | 0.74 | Retenção da velocidade horizontal no chão (0–1) |
-| `--particles` | 30000 | Máximo de partículas amostradas |
-| `--particle-size` | 2 | Tamanho quadrado da partícula renderizada |
-| `--seed` | 42 | Reprodutibilidade |
-| `--delay` | 1 | Tempo inicial com a imagem estática |
+| `--duration` | 60 | Duração total em segundos |
+| `--delay` | 2 | Imagem intacta antes da primeira desintegração |
+| `--release-duration` | 48 | Janela de liberação gradual de partículas |
+| `--release-mode` | bottom-up | `bottom-up` ou `noise` |
+| `--gravity` | 150 | Gravidade em pixels/s² |
+| `--drag` | 0.52 | Resistência exponencial do ar |
+| `--terminal-speed` | 210 | Velocidade máxima em pixels/s |
+| `--plinko-rows` | 4 | Fileiras de círculos invisíveis; 0 desativa |
+| `--force` | 230 | Força de explosão em pixels/s |
+| `--particles` | 30000 | Quantidade máxima de partículas |
+| `--seed` | 42 | Sequência reproduzível |
+
+Use `--width 1080 --height 1920 --fps 60` para Full HD vertical; a renderização será mais lenta.
 
 ## Testes
 
@@ -59,10 +56,9 @@ pip install -e '.[test]'
 pytest -q
 ```
 
-## Limitações da v0.1
+## Limitações
 
-- Simulação vetorizada NumPy, integração semi-implícita.
-- Colisões apenas com piso e paredes; ainda sem colisões entre partículas.
-- Sprites quadrados podem se sobrepor; não formam pilhas físicas.
-- Exportação offline em H.264 com FFmpeg.
-- Sem áudio, máscara progressiva, obstáculos ou GPU.
+- Colisão com o piso, paredes e círculos invisíveis, mas **sem colisões entre partículas**.
+- Obstáculos geométricos fixos, com resposta de contato aproximada.
+- Exportação MP4/H.264 sem áudio.
+- A desintegração gradual preserva a imagem até a liberação de cada partícula; é uma programação de ativação, não uma simulação de material granular contínuo.
