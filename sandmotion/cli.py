@@ -34,7 +34,12 @@ def main():
                         help="Linhas de obstáculos circulares invisíveis; 0 desliga")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--particle-size", type=int, default=2)
-    parser.add_argument("--crf", type=int, default=20)
+    parser.add_argument("--encoding-profile", choices=("social", "balanced", "quality"),
+                        default="social", help="social: 4 Mb/s, balanced: 6 Mb/s, quality: CRF")
+    parser.add_argument("--bitrate-mbps", type=float, default=None,
+                        help="Define bitrate médio de vídeo em Mb/s (sobrescreve social/balanced)")
+    parser.add_argument("--crf", type=int, default=20,
+                        help="Qualidade CRF usada no perfil quality; 0-51")
     args = parser.parse_args()
     if not args.image.is_file():
         parser.error(f"Imagem inexistente: {args.image}")
