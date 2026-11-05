@@ -1,4 +1,4 @@
-# SandMotion v0.7 — Explosão mais lenta e som sincronizado
+# SandMotion v0.8 — Explosão mais lenta e som sincronizado
 
 Renderizador em Python de um vídeo único de 60 segundos, com explosão, física de partículas, retorno e sons originais sintetizados automaticamente.
 
@@ -14,12 +14,16 @@ pytest -q
 
 ## Exportação compacta (novo padrão)
 
+O modo `narrative` agora usa **720×1280**, **90 mil partículas**, grãos de **3px** com rastros discretos, e o perfil **balanced (6 Mb/s)** por padrão. A imagem é ampliada sem distorção e aparece sobre um fundo suavemente desfocado da própria foto. A reconstrução ganha nitidez gradualmente de 52 a 57 segundos.
+
+Para comparar com a configuração anterior de 540×960, use `--width 540 --height 960 --particles 60000 --particle-size 2 --encoding-profile social`.
+
 O perfil `social` gera H.264 com `libx264 -preset slow -b:v 4M -maxrate 5M -bufsize 10M`. O objetivo é reduzir bastante o tamanho **sem precisar recodificar o MP4 depois**. O bitrate médio é um alvo, e o tamanho exato depende do conteúdo.
 
 | Perfil | Configuração |
 | --- | --- |
-| `social` (padrão) | 4 Mb/s, pico 5 Mb/s |
-| `balanced` | 6 Mb/s, pico 7,5 Mb/s |
+| `social` | 4 Mb/s, pico 5 Mb/s |
+| `balanced` (padrão) | 6 Mb/s, pico 7,5 Mb/s |
 | `quality` | CRF 20, sem alvo de tamanho |
 
 O limite de bitrate não implica um tamanho máximo rigoroso. Para personalizar:
@@ -44,8 +48,8 @@ sand-motion image.png --mode narrative --explosion-time 6 \
 
 ```bash
 sand-motion image.png --mode narrative --output output/narrative.mp4 \
-  --duration 60 --width 540 --height 960 --fps 30 \
-  --particles 60000 --motion-speed 0.6
+  --duration 60 --width 720 --height 1280 --fps 30 \
+  --particles 90000 --particle-size 3 --motion-speed 0.6
 ```
 
 ### Controlar a velocidade
@@ -97,3 +101,9 @@ sand-motion image.png --mode disintegration --duration 60 --delay 2 --release-du
 ```
 
 `--motion-speed` só altera o modo `narrative`. O áudio é sintetizado a partir de sinais originais; não inclui música comercial.
+
+## Qualidade visual
+
+O vídeo usa a resolução do **arquivo de entrada** para construir o raster inicial; aumentar a saída não cria detalhes que não existem no PNG/JPEG. Para maior definição, forneça uma imagem original nítida. O fundo desfocado preenche as áreas sem distorcer a imagem principal. Os rastros curtos dão continuidade visual à movimentação, enquanto grãos maiores reduzem a aparência de ruído branco.
+
+O perfil `quality` continua disponível caso queira menos compressão, mas arquivos podem ficar muito maiores.
