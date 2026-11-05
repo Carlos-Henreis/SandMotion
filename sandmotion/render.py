@@ -10,7 +10,9 @@ from .encoding import encoding_args
 
 def load_image(path: Path, width: int, height: int) -> Image.Image:
     rgba = Image.open(path).convert("RGBA")
-    rgba.thumbnail((int(width * 0.75), int(height * 0.54)), Image.Resampling.LANCZOS)
+    # Use nearly the full width, while retaining image aspect ratio.
+    rgba.thumbnail((max(1, int(width * 0.96)), max(1, int(height * 0.86))),
+                   Image.Resampling.LANCZOS)
     return rgba
 
 
@@ -55,17 +57,17 @@ def draw_frame(width: int, height: int, positions: np.ndarray,
     return frame.tobytes()
 
 
-def render(input_path: Path, output_path: Path, *, width: int = 540,
-           height: int = 960, fps: int = 30, duration: float = 60.0,
+def render(input_path: Path, output_path: Path, *, width: int = 720,
+           height: int = 1280, fps: int = 30, duration: float = 60.0,
            delay: float = 1.5, release_duration: float = 48.0,
            release_mode: str = "bottom-up", mode: str = "narrative",
-           cycle_duration: float = 12.0, count: int = 60000,
+           cycle_duration: float = 12.0, count: int = 90000,
            force: float = 1200.0, gravity: float = 520.0, drag: float = 0.12,
            bounce: float = 0.25, friction: float = 0.90, terminal_speed: float = 1400.0,
-           plinko_rows: int = 0, seed: int = 42, particle_size: int = 2,
+           plinko_rows: int = 0, seed: int = 42, particle_size: int = 3,
            crf: int = 20, soundtrack: Path | None = None,
            drop_sound: bool = True, motion_speed: float = 0.6,
-           encoding_profile: str = "social", bitrate_mbps: float | None = None,
+           encoding_profile: str = "balanced", bitrate_mbps: float | None = None,
            explosion_time: float = 3.0) -> None:
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("FFmpeg não encontrado. Instale com: sudo apt install ffmpeg")
