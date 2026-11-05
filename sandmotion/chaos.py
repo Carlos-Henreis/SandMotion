@@ -139,5 +139,5 @@ def rebuild_step(p: np.ndarray, v: np.ndarray, origins: np.ndarray,
 
 def reconstruction_blend(now: float) -> float:
     """Fade dense raster back in before 57s, hiding particle sampling holes."""
-    u = np.clip((now-54.5)/2.5, 0, 1)
+    u = np.clip((now-52.0)/5.0, 0, 1)
     return float(u*u*(3-2*u))
