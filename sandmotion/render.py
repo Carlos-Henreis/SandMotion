@@ -57,14 +57,23 @@ def draw_frame(width: int, height: int, positions: np.ndarray,
 def render(input_path: Path, output_path: Path, *, width: int = 540,
            height: int = 960, fps: int = 30, duration: float = 60.0,
            delay: float = 1.5, release_duration: float = 48.0,
-           release_mode: str = "bottom-up", mode: str = "explosion",
+           release_mode: str = "bottom-up", mode: str = "narrative",
            cycle_duration: float = 12.0, count: int = 60000,
            force: float = 1200.0, gravity: float = 520.0, drag: float = 0.12,
            bounce: float = 0.25, friction: float = 0.90, terminal_speed: float = 1400.0,
            plinko_rows: int = 0, seed: int = 42, particle_size: int = 2,
-           crf: int = 20) -> None:
+           crf: int = 20, soundtrack: Path | None = None,
+           drop_sound: bool = True) -> None:
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("FFmpeg não encontrado. Instale com: sudo apt install ffmpeg")
+    if mode == "narrative":
+        from .narrative import render_narrative
+        return render_narrative(input_path, output_path, width=width, height=height,
+                                fps=fps, duration=duration, count=count, seed=seed,
+                                particle_size=particle_size, crf=crf,
+                                soundtrack=soundtrack, drop_sound=drop_sound)
+    if soundtrack is not None:
+        raise ValueError("--soundtrack é suportado no modo narrative.")
     if min(width, height, fps, count, particle_size) <= 0 or duration <= 0:
         raise ValueError("Resolução, FPS, duração, partículas e tamanho devem ser positivos.")
     if mode not in ("explosion", "disintegration"):
