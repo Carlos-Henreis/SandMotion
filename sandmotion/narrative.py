@@ -6,6 +6,7 @@ import wave
 
 import numpy as np
 from PIL import Image
+from .encoding import encoding_args
 
 BACKGROUND = np.array([12, 14, 23], dtype=np.uint8)
 
@@ -186,13 +187,16 @@ def add_audio(video: Path, soundtrack: Path | None, cue: bool, duration: float) 
 def render_narrative(input_path: Path, output_path: Path, *, width: int, height: int,
                      fps: int, duration: float, count: int, seed: int,
                      particle_size: int, crf: int, soundtrack: Path | None = None,
-                     drop_sound: bool = True, motion_speed: float = 0.6, **unused) -> None:
+                     drop_sound: bool = True, motion_speed: float = 0.6,
+                     encoding_profile: str = "social", bitrate_mbps: float | None = None,
+                     **unused) -> None:
     """One long simulation; clean image 0-3s and 57-60s, chaos 3-50s."""
     from .chaos import (DURATION, phase, initial_burst, chaotic_step,
                         rebuild_step, reconstruction_blend)
     from .render import image_particles
     if not (0.1 <= motion_speed <= 2.0):
         raise ValueError('--motion-speed deve estar entre 0.1 e 2.0')
+    video_encoding = encoding_args(encoding_profile, crf=crf, bitrate_mbps=bitrate_mbps)
     if duration != DURATION:
         raise ValueError('O modo narrative exige --duration 60.')
     if width % 2 or height % 2 or min(width, height, fps, count, particle_size) <= 0:
@@ -217,8 +221,8 @@ def render_narrative(input_path: Path, output_path: Path, *, width: int, height:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = ['ffmpeg','-hide_banner','-loglevel','error','-y','-f','rawvideo',
            '-pix_fmt','rgb24','-s',f'{width}x{height}','-r',str(fps),
-           '-i','-','-an','-c:v','libx264','-preset','veryfast',
-           '-crf',str(crf),'-pix_fmt','yuv420p','-movflags','+faststart',
+           '-i','-','-an',*video_encoding,
+           '-pix_fmt','yuv420p','-movflags','+faststart',
            str(output_path)]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     total = round(duration*fps)
