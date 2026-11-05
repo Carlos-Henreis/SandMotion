@@ -4,25 +4,28 @@ from .render import render
 
 
 def main():
-    parser = argparse.ArgumentParser(description="SandMotion — desintegração progressiva em vídeo.")
+    parser = argparse.ArgumentParser(description="SandMotion — explosões ou desintegração progressiva em vídeo.")
     parser.add_argument("image", type=Path, help="PNG/JPEG de entrada")
     parser.add_argument("--output", type=Path, default=Path("output.mp4"))
     parser.add_argument("--width", type=int, default=540)
     parser.add_argument("--height", type=int, default=960)
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--duration", type=float, default=60)
-    parser.add_argument("--delay", type=float, default=2, help="Imagem intacta em segundos")
+    parser.add_argument("--mode", choices=("explosion", "disintegration"), default="explosion")
+    parser.add_argument("--cycle-duration", type=float, default=12,
+                        help="Intervalo entre explosões no modo explosion")
+    parser.add_argument("--delay", type=float, default=1.5, help="Imagem intacta em segundos")
     parser.add_argument("--release-duration", type=float, default=48,
                         help="Tempo durante o qual partículas são liberadas")
     parser.add_argument("--release-mode", choices=("bottom-up", "noise"), default="bottom-up")
-    parser.add_argument("--particles", type=int, default=30000, dest="count")
-    parser.add_argument("--force", type=float, default=230)
-    parser.add_argument("--gravity", type=float, default=150)
-    parser.add_argument("--drag", type=float, default=0.52)
-    parser.add_argument("--terminal-speed", type=float, default=210)
-    parser.add_argument("--bounce", type=float, default=0.45)
-    parser.add_argument("--friction", type=float, default=0.84)
-    parser.add_argument("--plinko-rows", type=int, default=4,
+    parser.add_argument("--particles", type=int, default=60000, dest="count")
+    parser.add_argument("--force", type=float, default=1200)
+    parser.add_argument("--gravity", type=float, default=520)
+    parser.add_argument("--drag", type=float, default=0.12)
+    parser.add_argument("--terminal-speed", type=float, default=1400)
+    parser.add_argument("--bounce", type=float, default=0.25)
+    parser.add_argument("--friction", type=float, default=0.90)
+    parser.add_argument("--plinko-rows", type=int, default=0,
                         help="Linhas de obstáculos circulares invisíveis; 0 desliga")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--particle-size", type=int, default=2)
