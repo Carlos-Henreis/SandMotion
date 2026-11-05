@@ -1,4 +1,4 @@
-# SandMotion v0.6 — Explosão mais lenta e som sincronizado
+# SandMotion v0.7 — Explosão mais lenta e som sincronizado
 
 Renderizador em Python de um vídeo único de 60 segundos, com explosão, física de partículas, retorno e sons originais sintetizados automaticamente.
 
@@ -11,6 +11,25 @@ source .venv/bin/activate
 pip install -e '.[test]'
 pytest -q
 ```
+
+## Exportação compacta (novo padrão)
+
+O perfil `social` gera H.264 com `libx264 -preset slow -b:v 4M -maxrate 5M -bufsize 10M`. O objetivo é reduzir bastante o tamanho **sem precisar recodificar o MP4 depois**. O bitrate médio é um alvo, e o tamanho exato depende do conteúdo.
+
+| Perfil | Configuração |
+| --- | --- |
+| `social` (padrão) | 4 Mb/s, pico 5 Mb/s |
+| `balanced` | 6 Mb/s, pico 7,5 Mb/s |
+| `quality` | CRF 20, sem alvo de tamanho |
+
+O limite de bitrate não implica um tamanho máximo rigoroso. Para personalizar:
+
+```bash
+sand-motion image.png --mode narrative --encoding-profile social \\
+  --bitrate-mbps 3 --output output/narrative.mp4
+```
+
+Para priorizar qualidade, use `--encoding-profile quality --crf 20`. Esses perfis também funcionam nos modos `explosion` e `disintegration`.
 
 ## Criar seu vídeo
 
