@@ -1,4 +1,4 @@
-"""Image-to-particles video renderer (constant 60-second preset)."""
+"""Render clean source frames before particle explosions or gradual disintegration."""
 import shutil
 import subprocess
 from pathlib import Path
@@ -7,10 +7,25 @@ from PIL import Image
 from .physics import explode, plinko_obstacles, release_times
 
 
-def image_particles(path: Path, width: int, height: int, max_particles: int,
-                    seed: int) -> tuple[np.ndarray, np.ndarray]:
+def load_image(path: Path, width: int, height: int) -> Image.Image:
     rgba = Image.open(path).convert("RGBA")
     rgba.thumbnail((int(width * 0.75), int(height * 0.54)), Image.Resampling.LANCZOS)
+    return rgba
+
+
+def load_centered_rgb(path: Path, width: int, height: int,
+                      background=(12, 14, 23)) -> np.ndarray:
+    """Render complete, un-sampled pixels (including composited transparency)."""
+    rgba = load_image(path, width, height)
+    canvas = Image.new("RGBA", (width, height), (*background, 255))
+    canvas.alpha_composite(rgba, ((width - rgba.width) // 2,
+                                  (height - rgba.height) // 2))
+    return np.asarray(canvas.convert("RGB"))
+
+
+def image_particles(path: Path, width: int, height: int, max_particles: int,
+                    seed: int) -> tuple[np.ndarray, np.ndarray]:
+    rgba = load_image(path, width, height)
     arr = np.asarray(rgba)
     coords = np.argwhere(arr[:, :, 3] >= 64)
     if not len(coords):
@@ -41,30 +56,40 @@ def draw_frame(width: int, height: int, positions: np.ndarray,
 
 def render(input_path: Path, output_path: Path, *, width: int = 540,
            height: int = 960, fps: int = 30, duration: float = 60.0,
-           delay: float = 2.0, release_duration: float = 48.0,
-           release_mode: str = "bottom-up", count: int = 30000,
-           force: float = 230.0, gravity: float = 150.0, drag: float = 0.52,
-           bounce: float = 0.45, friction: float = 0.84, terminal_speed: float = 210.0,
-           plinko_rows: int = 4, seed: int = 42, particle_size: int = 2,
+           delay: float = 1.5, release_duration: float = 48.0,
+           release_mode: str = "bottom-up", mode: str = "explosion",
+           cycle_duration: float = 12.0, count: int = 60000,
+           force: float = 1200.0, gravity: float = 520.0, drag: float = 0.12,
+           bounce: float = 0.25, friction: float = 0.90, terminal_speed: float = 1400.0,
+           plinko_rows: int = 0, seed: int = 42, particle_size: int = 2,
            crf: int = 20) -> None:
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("FFmpeg não encontrado. Instale com: sudo apt install ffmpeg")
     if min(width, height, fps, count, particle_size) <= 0 or duration <= 0:
         raise ValueError("Resolução, FPS, duração, partículas e tamanho devem ser positivos.")
-    if delay < 0 or release_duration <= 0 or delay + release_duration > duration:
-        raise ValueError("Exige 0 <= delay, release_duration > 0 e delay + release_duration <= duration.")
+    if mode not in ("explosion", "disintegration"):
+        raise ValueError("mode deve ser explosion ou disintegration.")
+    if delay < 0 or release_duration <= 0 or cycle_duration <= delay:
+        raise ValueError("Exige delay >= 0, release_duration > 0 e cycle_duration > delay.")
+    if mode == "disintegration" and delay + release_duration > duration:
+        raise ValueError("delay + release_duration deve caber na duração total.")
     if width % 2 or height % 2:
         raise ValueError("Largura e altura devem ser pares para yuv420p.")
     if not (0 <= bounce <= 1 and 0 <= friction <= 1 and drag >= 0 and gravity >= 0
             and terminal_speed > 0 and force >= 0 and plinko_rows >= 0):
         raise ValueError("Valores físicos inválidos.")
+    raster_frame = load_centered_rgb(input_path, width, height).tobytes()
     start, colors = image_particles(input_path, width, height, count, seed)
     floor = height - 1 - particle_size // 2
     obstacles = plinko_obstacles(width, height, plinko_rows)
-    particles = explode(start, colors, seed, force, gravity, drag, bounce,
-                        friction, width, floor, particle_size // 2,
-                        terminal_speed, obstacles)
-    schedule = release_times(start, seed, release_duration, release_mode) + delay
+    def new_system():
+        return explode(start, colors, seed, force, gravity, drag, bounce,
+                       friction, width, floor, particle_size // 2,
+                       terminal_speed, obstacles)
+
+    particles = new_system()
+    schedule = (release_times(start, seed, release_duration, release_mode) + delay
+                if mode == "disintegration" else None)
     frames = round(duration * fps)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
@@ -72,19 +97,34 @@ def render(input_path: Path, output_path: Path, *, width: int = 540,
            "-r", str(fps), "-i", "-", "-an", "-c:v", "libx264",
            "-preset", "veryfast", "-crf", str(crf), "-pix_fmt", "yuv420p",
            "-movflags", "+faststart", str(output_path)]
-    print(f"Partículas: {len(colors):,} | duração: {duration}s | "
-          f"liberação: {release_duration}s | obstáculos: {len(obstacles)}", flush=True)
+    print(f"Modo: {mode} | Partículas: {len(colors):,} | duração: {duration}s | "
+          f"ciclo: {cycle_duration}s | obstáculos: {len(obstacles)}", flush=True)
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
+        cycle_frames = max(1, round(cycle_duration * fps))
+        still_frames = round(delay * fps)
         for frame_index in range(frames):
-            time = frame_index / fps
-            active = time >= schedule
-            if np.any(active):
-                # Four physics substeps reduce tunneling and improve peg collisions.
-                for _ in range(4):
-                    particles.step(1 / (fps * 4), active)
-            proc.stdin.write(draw_frame(width, height, particles.positions,
-                                        colors, particle_size))
+            if mode == "explosion":
+                cycle_frame = frame_index % cycle_frames
+                if cycle_frame == 0 and frame_index != 0:
+                    particles = new_system()
+                if cycle_frame < still_frames:
+                    frame_bytes = raster_frame
+                else:
+                    for _ in range(4):
+                        particles.step(1 / (fps * 4))
+                    frame_bytes = draw_frame(width, height, particles.positions,
+                                             colors, particle_size)
+            else:
+                time = frame_index / fps
+                active = time >= schedule
+                if np.any(active):
+                    for _ in range(4):
+                        particles.step(1 / (fps * 4), active)
+                frame_bytes = (raster_frame if time < delay
+                               else draw_frame(width, height, particles.positions,
+                                               colors, particle_size))
+            proc.stdin.write(frame_bytes)
             if (frame_index + 1) % max(1, fps * 5) == 0:
                 print(f"  {frame_index + 1}/{frames} frames", flush=True)
         proc.stdin.close()
