@@ -1,53 +1,59 @@
-# SandMotion v0.3 — Explosão com imagem nítida
+# SandMotion v0.4 — Narrative (60 segundos)
 
-Transforma um PNG ou JPEG em partículas explodindo e caindo. O modo padrão **explosion** mostra a imagem original completa (sem amostragem ou pontilhado) antes da explosão. O modo **disintegration** preserva a liberação progressiva.
+Gera um vídeo de 60 segundos a partir de PNG/JPEG, com **uma única simulação contínua**: imagem nítida → desintegração esquerda-direita → funil com turbulência → reconstrução fiel à imagem original. Sem reinícios a cada 12 segundos.
 
-## Instalação
+## Instalação no Debian
 
 ```bash
 sudo apt install ffmpeg python3-venv
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e '.[test]'
-python examples/make_demo.py
 pytest -q
+python examples/make_demo.py
 ```
 
-## Explosão — vídeo de 60 segundos
+## Gerar vídeo de 60 segundos (modo padrão)
 
 ```bash
-sand-motion imagem.png --output output/explosao.mp4 \
-  --mode explosion --duration 60 --cycle-duration 12 \
-  --delay 1.5 --particles 60000 --force 1200 \
-  --gravity 520 --drag 0.12 --terminal-speed 1400 \
-  --bounce 0.25 --friction 0.90 --plinko-rows 0 \
-  --fps 30
+sand-motion imagem.png --output output/narrative.mp4 --mode narrative \
+  --duration 60 --width 540 --height 960 --fps 30 --particles 60000
 ```
 
-**Timeline:** cinco ciclos de 12 segundos no MP4 de 60 segundos. Em cada ciclo: imagem original limpa por 1,5 s, explosão radial instantânea e queda durante os 10,5 s seguintes. A imagem reaparece no começo de cada ciclo (corte intencional). Não é uma única explosão sustentada fisicamente por 60 s.
-
-O modo `explosion` é o padrão. Para vídeo curto, use `--duration 12`, mantendo `--cycle-duration 12`.
-
-## Desintegração gradual (alternativa)
+Com trilha fornecida por você:
 
 ```bash
+sand-motion imagem.png --mode narrative --soundtrack minha-trilha.mp3 \
+  --output output/com-musica.mp4
+```
+
+O motor adiciona **um efeito de drop sintetizado** no segundo **45.000**. Se fornecer sua própria trilha, ela será combinada com esse efeito. Para desativar o efeito, use `--no-drop-sound`. Não há seleção automática de batidas musicais nem alteração inteligente do arranjo; o marcador sonoro fica rigorosamente nos 45 segundos.
+
+### Timeline
+
+| Tempo | Cena |
+| --- | --- |
+| 0–5 s | Imagem original raster intacta |
+| 5–25 s | Liberação orgânica da esquerda para a direita, com ruído espacial |
+| 25–45 s | 5 círculos e 2 rampas invisíveis com turbulência lateral |
+| 45–58 s | Atração amortecida crescente para as posições originais |
+| 58–60 s | Transição suave para a imagem raster completa; último quadro coincide com a imagem inicial |
+
+O modo usa pixels completos na parte da imagem ainda não liberada, evitando o efeito pontilhado visto na v0.2. A fase de retorno preserva as posições originais de cada partícula; a composição raster final corrige os intervalos entre partículas amostradas.
+
+**Observação:** nas fases 5–45s, as partículas são independentes e ainda podem se sobrepor, sem colisão grão-grão. O formato final é MP4 H.264 + AAC (quando há efeito de áudio ou trilha).
+
+## Outros modos preservados
+
+```bash
+# Explosões radiais repetidas, para vídeos curtos
+sand-motion imagem.png --mode explosion --duration 12 --cycle-duration 12
+
+# Desintegração progressiva antiga
 sand-motion imagem.png --mode disintegration --duration 60 \
-  --delay 2 --release-duration 48 --release-mode bottom-up \
-  --force 230 --gravity 150 --drag 0.52 \
-  --terminal-speed 210 --plinko-rows 4
+  --delay 2 --release-duration 48 --release-mode bottom-up
 ```
 
-## Parâmetros
+## Notas de desempenho
 
-- `--mode explosion|disintegration`: comportamento do motor
-- `--duration`: duração final do MP4 (padrão: 60 s)
-- `--cycle-duration`: duração de cada ciclo explosivo (padrão: 12 s)
-- `--delay`: tempo com imagem raster nítida antes de cada explosão
-- `--particles`: limite de partículas após a explosão; não limita os pixels da prévia
-- `--force`, `--gravity`, `--drag`, `--terminal-speed`: parâmetros físicos
-- `--plinko-rows`: 0 desativa obstáculos invisíveis (padrão no modo explosion)
-- `--release-duration` e `--release-mode`: apenas modo disintegration
-
-## Limitações
-
-As partículas são independentes, sem colisão entre elas. Durante a explosão podem existir espaços visíveis entre grãos — isso não afeta a nitidez da imagem inicial. O vídeo não contém áudio. A renderização usa FFmpeg.
+Comece em 540x960, 30 FPS com 20–60 mil partículas; 1080x1920 a 60 FPS é significativamente mais caro. O modo narrative exige `--duration 60` porque os marcos de tempo são absolutos. Os modos anteriores continuam disponíveis.
