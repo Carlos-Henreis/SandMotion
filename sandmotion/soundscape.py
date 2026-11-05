@@ -11,9 +11,12 @@ import numpy as np
 SAMPLE_RATE = 24000
 
 
-def soundscape(duration: float = 60., seed: int = 42, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
+def soundscape(duration: float = 60., seed: int = 42, sample_rate: int = SAMPLE_RATE,
+               explosion_time: float = 3.0) -> np.ndarray:
     if duration <= 0 or sample_rate <= 0:
         raise ValueError("duration and sample_rate must be positive")
+    if not (0 <= explosion_time < 50):
+        raise ValueError("explosion_time deve ser >= 0 e < 50")
     rng = np.random.default_rng(seed)
     length = round(duration * sample_rate)
     out = np.zeros(length, dtype=np.float32)
@@ -38,10 +41,10 @@ def soundscape(duration: float = 60., seed: int = 42, sample_rate: int = SAMPLE_
     # Differencing creates a brighter crash without a DSP dependency.
     bright = burst_noise - np.roll(burst_noise, 1)
     explosion = bass + .12*bright*np.exp(-7*t)
-    add_at(3., explosion)
+    add_at(explosion_time, explosion)
 
     # 3-50 seconds: long evolving airflow / fine-grain rustle.
-    lo = round(3*sample_rate)
+    lo = round(explosion_time*sample_rate)
     hi = min(round(50*sample_rate), length)
     if hi > lo:
         count = hi-lo
@@ -55,7 +58,7 @@ def soundscape(duration: float = 60., seed: int = 42, sample_rate: int = SAMPLE_
         rough[window:] = smoothed.astype(np.float32)
         modulation = .55 + .45*np.sin(2*np.pi*(.23*tt + .002*tt*tt))**2
         fadein = np.clip(tt/.45, 0, 1)
-        fadeout = np.clip((47-tt)/.8, 0, 1)
+        fadeout = np.clip(((50-explosion_time)-tt)/.8, 0, 1)
         out[lo:hi] += .12*rough*modulation*fadein*fadeout
 
     # 50 seconds: reverse / gathering sweep converging into a tonal landing.
@@ -78,8 +81,9 @@ def soundscape(duration: float = 60., seed: int = 42, sample_rate: int = SAMPLE_
 
 
 def soundscape_wave(path: Path, duration: float = 60., seed: int = 42,
-                    sample_rate: int = SAMPLE_RATE) -> None:
-    audio = soundscape(duration, seed, sample_rate)
+                    sample_rate: int = SAMPLE_RATE,
+                    explosion_time: float = 3.0) -> None:
+    audio = soundscape(duration, seed, sample_rate, explosion_time)
     with wave.open(str(path), 'wb') as wav:
         wav.setnchannels(1)
         wav.setsampwidth(2)
