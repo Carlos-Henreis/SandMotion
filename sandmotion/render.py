@@ -1,10 +1,10 @@
-"""Load the image, scatter pixels, and stream frames to FFmpeg."""
+"""Image-to-particles video renderer (constant 60-second preset)."""
 import shutil
 import subprocess
 from pathlib import Path
 import numpy as np
 from PIL import Image
-from .physics import explode
+from .physics import explode, plinko_obstacles, release_times
 
 
 def image_particles(path: Path, width: int, height: int, max_particles: int,
@@ -30,7 +30,6 @@ def draw_frame(width: int, height: int, positions: np.ndarray,
     frame = np.empty((height, width, 3), dtype=np.uint8)
     frame[:] = background
     coords = np.rint(positions).astype(np.int32)
-    # Colored square sprites. Renderer can be replaced without touching physics.
     for dy in range(-(size // 2), size - size // 2):
         for dx in range(-(size // 2), size - size // 2):
             x = coords[:, 0] + dx
@@ -41,45 +40,53 @@ def draw_frame(width: int, height: int, positions: np.ndarray,
 
 
 def render(input_path: Path, output_path: Path, *, width: int = 540,
-           height: int = 960, fps: int = 30, duration: float = 8.0,
-           delay: float = 1.0, count: int = 30000, force: float = 650.0,
-           gravity: float = 900.0, drag: float = 0.22, bounce: float = 0.35,
-           friction: float = 0.74, seed: int = 42, particle_size: int = 2,
+           height: int = 960, fps: int = 30, duration: float = 60.0,
+           delay: float = 2.0, release_duration: float = 48.0,
+           release_mode: str = "bottom-up", count: int = 30000,
+           force: float = 230.0, gravity: float = 150.0, drag: float = 0.52,
+           bounce: float = 0.45, friction: float = 0.84, terminal_speed: float = 210.0,
+           plinko_rows: int = 4, seed: int = 42, particle_size: int = 2,
            crf: int = 20) -> None:
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("FFmpeg não encontrado. Instale com: sudo apt install ffmpeg")
-    if min(width, height, fps, count, particle_size) <= 0 or duration <= 0 or delay < 0 or delay >= duration:
-        raise ValueError("Verifique resolução, FPS, quantidade de partículas, duração e delay.")
+    if min(width, height, fps, count, particle_size) <= 0 or duration <= 0:
+        raise ValueError("Resolução, FPS, duração, partículas e tamanho devem ser positivos.")
+    if delay < 0 or release_duration <= 0 or delay + release_duration > duration:
+        raise ValueError("Exige 0 <= delay, release_duration > 0 e delay + release_duration <= duration.")
     if width % 2 or height % 2:
-        raise ValueError("Largura e altura devem ser pares para codificação yuv420p.")
-    if not (0 <= bounce <= 1 and 0 <= friction <= 1 and drag >= 0 and gravity >= 0):
-        raise ValueError("bounce e friction: 0..1; drag e gravity: >= 0.")
+        raise ValueError("Largura e altura devem ser pares para yuv420p.")
+    if not (0 <= bounce <= 1 and 0 <= friction <= 1 and drag >= 0 and gravity >= 0
+            and terminal_speed > 0 and force >= 0 and plinko_rows >= 0):
+        raise ValueError("Valores físicos inválidos.")
     start, colors = image_particles(input_path, width, height, count, seed)
     floor = height - 1 - particle_size // 2
+    obstacles = plinko_obstacles(width, height, plinko_rows)
     particles = explode(start, colors, seed, force, gravity, drag, bounce,
-                        friction, width, floor, particle_size // 2)
+                        friction, width, floor, particle_size // 2,
+                        terminal_speed, obstacles)
+    schedule = release_times(start, seed, release_duration, release_mode) + delay
     frames = round(duration * fps)
-    still_frames = round(delay * fps)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
            "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{width}x{height}",
            "-r", str(fps), "-i", "-", "-an", "-c:v", "libx264",
            "-preset", "veryfast", "-crf", str(crf), "-pix_fmt", "yuv420p",
            "-movflags", "+faststart", str(output_path)]
-    print(f"Partículas: {len(colors):,} | frames: {frames} | saída: {output_path}", flush=True)
+    print(f"Partículas: {len(colors):,} | duração: {duration}s | "
+          f"liberação: {release_duration}s | obstáculos: {len(obstacles)}", flush=True)
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
         for frame_index in range(frames):
-            if frame_index >= still_frames:
-                # Substeps reduce tunneling through scene boundaries at high speeds.
-                for _ in range(2):
-                    particles.step(1 / (fps * 2))
-                positions = particles.positions
-            else:
-                positions = start
-            proc.stdin.write(draw_frame(width, height, positions, colors, particle_size))
-            if (frame_index + 1) % max(1, fps * 2) == 0:
-                print(f"  {frame_index + 1}/{frames} quadros", flush=True)
+            time = frame_index / fps
+            active = time >= schedule
+            if np.any(active):
+                # Four physics substeps reduce tunneling and improve peg collisions.
+                for _ in range(4):
+                    particles.step(1 / (fps * 4), active)
+            proc.stdin.write(draw_frame(width, height, particles.positions,
+                                        colors, particle_size))
+            if (frame_index + 1) % max(1, fps * 5) == 0:
+                print(f"  {frame_index + 1}/{frames} frames", flush=True)
         proc.stdin.close()
         error = proc.stderr.read().decode("utf-8", errors="replace")
         if proc.wait() != 0:
