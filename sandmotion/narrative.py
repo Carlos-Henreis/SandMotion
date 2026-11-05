@@ -164,7 +164,8 @@ def add_audio(video: Path, soundtrack: Path | None, cue: bool, duration: float) 
         temp = Path(td)
         cue_path = temp/'drop.wav'
         if cue:
-            cue_wave(cue_path)
+            from .soundscape import soundscape_wave
+            soundscape_wave(cue_path, duration=duration)
         out = temp/'mux.mp4'
         cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(video)]
         if soundtrack is not None:
@@ -172,9 +173,9 @@ def add_audio(video: Path, soundtrack: Path | None, cue: bool, duration: float) 
         if cue:
             cmd += ['-i', str(cue_path)]
         if soundtrack is not None and cue:
-            cmd += ['-filter_complex', '[1:a]volume=0.65[m];[2:a]adelay=50000:all=1[c];[m][c]amix=inputs=2:duration=first:normalize=0[a]', '-map','0:v:0','-map','[a]']
+            cmd += ['-filter_complex', '[1:a]volume=0.55[m];[2:a]volume=0.95[c];[m][c]amix=inputs=2:duration=first:normalize=0[a]', '-map','0:v:0','-map','[a]']
         elif cue:
-            cmd += ['-af', 'adelay=50000:all=1', '-map','0:v:0','-map','1:a:0']
+            cmd += ['-map','0:v:0','-map','1:a:0']
         else:
             cmd += ['-map','0:v:0','-map','1:a:0']
         cmd += ['-c:v','copy','-c:a','aac','-b:a','160k', '-t', str(duration), str(out)]
@@ -185,11 +186,13 @@ def add_audio(video: Path, soundtrack: Path | None, cue: bool, duration: float) 
 def render_narrative(input_path: Path, output_path: Path, *, width: int, height: int,
                      fps: int, duration: float, count: int, seed: int,
                      particle_size: int, crf: int, soundtrack: Path | None = None,
-                     drop_sound: bool = True, **unused) -> None:
+                     drop_sound: bool = True, motion_speed: float = 0.6, **unused) -> None:
     """One long simulation; clean image 0-3s and 57-60s, chaos 3-50s."""
     from .chaos import (DURATION, phase, initial_burst, chaotic_step,
                         rebuild_step, reconstruction_blend)
     from .render import image_particles
+    if not (0.1 <= motion_speed <= 2.0):
+        raise ValueError('--motion-speed deve estar entre 0.1 e 2.0')
     if duration != DURATION:
         raise ValueError('O modo narrative exige --duration 60.')
     if width % 2 or height % 2 or min(width, height, fps, count, particle_size) <= 0:
@@ -229,7 +232,10 @@ def render_narrative(input_path: Path, output_path: Path, *, width: int, height:
                 for _ in range(4):
                     dt = 1/(fps*4)
                     if scene == 'chaos':
-                        chaotic_step(p, v, dt, now, width, height, circles, ramps)
+                        # Slow the physics, not the video clock or the scene boundaries.
+                        simulated_time = 3 + (now - 3)*motion_speed
+                        chaotic_step(p, v, dt*motion_speed, simulated_time,
+                                     width, height, circles, ramps)
                     else:
                         rebuild_step(p, v, origins, dt, now)
                 frame = np.empty((height, width, 3), dtype=np.uint8)
