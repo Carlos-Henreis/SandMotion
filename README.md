@@ -31,6 +31,15 @@ sand-motion image.png --mode narrative --encoding-profile social \\
 
 Para priorizar qualidade, use `--encoding-profile quality --crf 20`. Esses perfis também funcionam nos modos `explosion` e `disintegration`.
 
+## Parametrizar o instante da explosão
+
+Use `--explosion-time` para escolher quantos segundos a imagem permanece intacta antes da explosão. O padrão é **3 segundos**. São aceitos valores de 0 até menos de 50 segundos; o retorno continua começando no segundo 50 e a imagem final reaparece aos 57. O som da explosão e o início do som das partículas acompanham a configuração.
+
+```bash
+sand-motion image.png --mode narrative --explosion-time 6 \
+  --motion-speed 0.5 --output output/narrative.mp4
+```
+
 ## Criar seu vídeo
 
 ```bash
